@@ -177,14 +177,8 @@ def train_epoch(
 
     model.train()
 
-    if subset is not None:
-        num_batches = int(num_batches * subset)
-        loader = itertools.islice(loader, num_batches)
-
-    if verbose:
-        loader = tqdm.tqdm(loader, total=num_batches)
-
-    reduction = "sum" if fbgd else "mean"
+    reduction = "mean"
+    assert reduction == 'mean'
     optimizer.zero_grad()
 
     for i, (input, target) in enumerate(loader):
@@ -193,112 +187,30 @@ def train_epoch(
             target = target.cuda(non_blocking=True)
 
         loss, output = criterion(model, input, target, reduction)
-        #for n, p in model.named_parameters():
-        #    if check_si_name(n, model_name):
-        #        tmp = p.detach().cpu().numpy() ** 2
-        #        print(n, np.min(tmp.reshape(tmp.shape[0], -1).sum(-1)))
-        #print("TEST! Iteration ", i)
-        #print("TEST! Loss = ",loss)
+
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
 
 
-        if fbgd:
-            loss_sum += loss.item()
-            loss /= len(loader.dataset)
-            loss.backward()
-        else:
-            loss.backward()
-            #for n,p in model.named_parameters():
-            #    if check_si_name(n, model_name):
-            #        print(n,(p.grad.cpu().numpy()**2).sum())
-            optimizer.step()
-            optimizer.zero_grad()
-
-            #loss, output = criterion(model, input, target, reduction)
-            #print("TEST! Loss new 1 = ", loss)
-            #loss.backward()
-            #for n, p in model.named_parameters():
-            #    if check_si_name(n, model_name):
-            #        print(n, (p.grad.cpu().numpy() ** 2).sum())
-            #optimizer.zero_grad()
-
-            if fix_elr and si_pnorm_0 is not None:
-                fix_si_pnorm(model, si_pnorm_0, model_name)
-
-            if fix_all_elr and si_pnorm_0 is not None:
-                fix_si_pnorms(model, si_pnorm_0, model_name)
+        if fix_elr and si_pnorm_0 is not None:
+            fix_si_pnorm(model, si_pnorm_0, model_name)
                 
-            loss_sum += loss.data.item() * input.size(0)
+        loss_sum += loss.data.item() * input.size(0)
 
-        if not regression:
-            pred = output.data.argmax(1, keepdim=True)
-            correct += pred.eq(target.data.view_as(pred)).sum().item()
+        
+        pred = output.data.argmax(1, keepdim=True)
+        correct += pred.eq(target.data.view_as(pred)).sum().item()
 
         num_objects_current += input.size(0)
 
-        if verbose and 10 * (i + 1) / num_batches >= verb_stage + 1:
-            print(
-                "Stage %d/10. Loss: %12.4f. Acc: %6.2f"
-                % (
-                    verb_stage + 1,
-                    loss_sum / num_objects_current,
-                    correct / num_objects_current * 100.0,
-                )
-            )
-            verb_stage += 1
             
-        if (save_freq_int > 0) and (save_freq_int*(i+1)/ num_batches >= save_ind + 1) and (save_ind + 1 < save_freq_int):
-            save_checkpoint_int(
-                output_dir,
-                epoch,
-                save_ind + 1,
-                state_dict=model.state_dict(),
-                optimizer=optimizer.state_dict()
-            )
-            save_ind += 1
-            
-
-    if fbgd:
-        optimizer.step()
-        optimizer.zero_grad()
-        
-        if fix_elr and si_pnorm_0 is not None:
-            fix_si_pnorm(model, si_pnorm_0, model_name)
-        if fix_all_elr and si_pnorm_0 is not None:
-            fix_si_pnorms(model, si_pnorm_0, model_name)
 
     return {
         "loss": loss_sum / num_objects_current,
         "accuracy": None if regression else correct / num_objects_current * 100.0,
     }
 
-
-def eval(loader, model, criterion, cuda=True, regression=False, verbose=False):
-    loss_sum = 0.0
-    correct = 0.0
-    num_objects_total = len(loader.dataset)
-
-    model.eval()
-
-    with torch.no_grad():
-        if verbose:
-            loader = tqdm.tqdm(loader)
-        for i, (input, target) in enumerate(loader):
-            if cuda:
-                input = input.cuda(non_blocking=True)
-                target = target.cuda(non_blocking=True)
-
-            loss, output = criterion(model, input, target)
-
-            loss_sum += loss.item() * input.size(0)
-
-            if not regression:
-                pred = output.data.argmax(1, keepdim=True)
-                correct += pred.eq(target.data.view_as(pred)).sum().item()
-
-    return {
-        "loss": loss_sum / num_objects_total,
-        "accuracy": None if regression else correct / num_objects_total * 100.0,
-    }
 
 
 def predict(loader, model, verbose=False):

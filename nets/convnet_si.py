@@ -8,6 +8,18 @@ import torch.nn as nn
 import torch
 from training_utils import unflatten_like
 
+def unflatten_like(vector, likeTensorList):
+    # Takes a flat torch.tensor and unflattens it to a list of torch.tensors
+    #    shaped like likeTensorList
+    outList = []
+    i = 0
+    for tensor in likeTensorList:
+        # n = module._parameters[name].numel()
+        n = tensor.numel()
+        outList.append(vector[:, i : i + n].view(tensor.shape))
+        i += n
+    return outList
+
 def block(input, output):
     # Layer i
     module_list = [

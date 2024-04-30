@@ -1,4 +1,3 @@
-#! /usr/bin/env python
 import os
 import subprocess
 import argparse
@@ -16,7 +15,8 @@ if args.test:
 else:
     action = os.system
 
-ENVIRONMENT = 'SI_regimes_env'
+#ENVIRONMENT = 'SI_regimes_env'
+ENVIRONMENT = None
 
 data = 'CIFAR10' # 'CIFAR10' 'CIFAR100' 
 network = 'ConvNetSI'# 'ConvNetSI' 'ConvNetSIAf' 'ResNet18SI' 'ResNet18SIAf'
@@ -57,7 +57,7 @@ params = {'dataset': data, # dataset
           'momentum': 0.0, # momentum
           'num_channels': 32, # network width
           'depth': 3, # network depth
-          'epochs': 3, # number of epochs
+          'epochs': 1000, # number of epochs
           'corrupt_train': 0.0, # label noise
           'save_freq': 1, # save checkpoint each x epochs
           'eval_freq': 1000, # write test metrics into the log each x epochs (we do not use them)
@@ -130,31 +130,32 @@ else:
 
 
 # train
+# commands.append(
+#     '/workspace/three_regimes_on_the_sphere/train.py {} >> {}'.format(' '.join(["--{} {}".format(k, v) for (k, v) in params.items()]) + ' ' + add_params,
+#                                exp_log_path + '.out'))
+
 commands.append(
-    'train.py {} >> {}'.format(' '.join(["--{} {}".format(k, v) for (k, v) in params.items()]) + ' ' + add_params,
-                               exp_log_path + '.out'))
+    '/workspace/three_regimes_on_the_sphere/train.py {}'.format(' '.join(["--{} {}".format(k, v) for (k, v) in params.items()]) + ' ' + add_params))
 
 p_test = params_test.copy()
 # train info
 p_test['save_path'] = params_test['save_path'] + '/' + exp_name + '/train-tm.npz'
-commands.append('get_info.py {} --corrupt_train {} --train_mode {} --eval_model --all_pnorm'.format(
-    ' '.join(["--{} {}".format(k, v) for (k, v) in p_test.items()]), params['corrupt_train'], subsets))
+commands.append('/workspace/three_regimes_on_the_sphere/get_info.py {} --corrupt_train {} --train_mode {} --eval_model --all_pnorm'.format(
+   ' '.join(["--{} {}".format(k, v) for (k, v) in p_test.items()]), params['corrupt_train'], subsets))
 #add --calc_grad_norms to compute gradient norms in case of non SI nets
 
 # test info
 p_test['save_path'] = params_test['save_path'] + '/' + exp_name + '/test-em.npz'
-commands.append('get_info.py {} --use_test --eval_model'.format(
+commands.append('/workspace/three_regimes_on_the_sphere/get_info.py {} --use_test --eval_model'.format(
     ' '.join(["--{} {}".format(k, v) for (k, v) in p_test.items()])))
 
 # prebn info
 p_test['save_path'] = params_test['save_path'] + '/' + exp_name + '/train-tm-prebn.npz'
-commands.append('get_info.py {} --corrupt_train {} --train_mode {} --all_pnorm --calc_grad_norms --prebn_only'.format(' '.join(["--{} {}".format(k,v) for (k, v) in p_test.items()]), params['corrupt_train'], subsets))
+commands.append('/workspace/three_regimes_on_the_sphere/get_info.py {} --corrupt_train {} --train_mode {} --all_pnorm --calc_grad_norms --prebn_only'.format(' '.join(["--{} {}".format(k,v) for (k, v) in p_test.items()]), params['corrupt_train'], subsets))
 #add --calc_grad_norms to compute gradient norms in case of SI nets
 
-if ENVIRONMENT:
-    tmp_str = ' && ~/anaconda3/envs/{}/bin/python '.format(ENVIRONMENT)
-    final_command = "bash -c '. activate {} {} {}'".format(ENVIRONMENT, tmp_str, tmp_str.join(commands))
-else:
-    final_command = 'python '.join(commands)
+print(params)
+print(add_params)
 
-action(final_command)
+for command in commands:
+    action('python3 ' + command)
